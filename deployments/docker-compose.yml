@@ -1,0 +1,55 @@
+
+version: "3.9"
+
+services:
+  message-broker:
+    image: rabbitmq:3-management-alpine
+    container_name: message-broker
+    ports:
+      - 5672:5672  
+      - 15672:15672
+    volumes:
+      - ${HOME}/dev-rabbitmq/data/:/var/lib/rabbitmq
+      - ${HOME}/dev-rabbitmq/log/:/var/log/rabbitmq
+    restart: always
+    networks:
+      - dev-network
+  server:
+    container_name: server
+    build:
+      context: ../
+      dockerfile: ./build/server.Dockerfile
+    environment:
+      AMQP_SERVER_URL: ${AMQP_SERVER_URL}
+      AMQP_QUEUE_NAME: ${AMQP_QUEUE_NAME}
+    restart: always
+    networks:
+      - dev-network
+    depends_on:
+      - message-broker
+  docs:
+    container_name: docs
+    ports:
+      - 3000:${DOCS_PORT}
+    build:
+      context: ../
+      dockerfile: ./build/docs.Dockerfile
+    environment:
+      PORT: ${DOCS_PORT}
+    restart: always
+  client:
+    container_name: client
+    build:
+      context: ../
+      dockerfile: ./build/client.Dockerfile
+    environment:
+      AMQP_SERVER_URL: ${AMQP_SERVER_URL}
+      AMQP_QUEUE_NAME: ${AMQP_QUEUE_NAME}
+    restart: always
+    networks:
+      - dev-network
+    depends_on:
+      - message-broker
+networks:
+  dev-network:
+    driver: bridge

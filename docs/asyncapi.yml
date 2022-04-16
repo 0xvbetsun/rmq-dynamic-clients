@@ -1,0 +1,39 @@
+asyncapi: '2.2.0'
+info:
+  title: Items Service
+  version: 1.0.0
+  description: This service is in charge of processing CRUD of items
+servers:
+  dev:
+    url: guest:guest@localhost:5672
+    protocol: amqp
+channels:
+  items:
+    publish:
+      message:
+        $ref: '#/components/messages/Items'
+  items.add:
+    publish:
+      message:
+        $ref: '#/components/messages/Item'
+  items.get:
+    publish:
+      message:
+        $ref: '#/components/messages/Item'
+  items.remove:
+    publish:
+      message:
+        $ref: '#/components/messages/Item'
+  
+components:
+  messages:
+    Item:
+      payload:
+        type: string
+        description: Single Item
+        example: A
+    Items:
+      payload:
+        type: array
+        description: All Items
+        example: [A, B, C, D]
