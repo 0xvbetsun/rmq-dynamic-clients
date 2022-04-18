@@ -2,57 +2,68 @@ package main
 
 import (
 	"log"
+	"net/rpc"
 	"os"
 
 	"github.com/streadway/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/codec"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/ordered"
 )
 
+type Items struct {
+	om *ordered.Map
+}
+
+func NewItems() *Items {
+	return &Items{
+		om: ordered.NewMap(),
+	}
+}
+
+func (i *Items) AddItem(val string, item *string) error {
+	*item = i.om.Set(val)
+	log.Printf("add item: %v", i.om)
+	return nil
+}
+
+func (i *Items) GetItem(val string, item *string) error {
+	*item = i.om.Get(val)
+	log.Printf("get item: %v", i.om)
+	return nil
+}
+
+func (i Items) GetAllItems(val string, items *[]string) error {
+	*items = i.om.Keys()
+	log.Printf("get all items: %v", i.om)
+	return nil
+}
+
+func (i Items) RemoveItem(val string, deleted *bool) error {
+	*deleted = i.om.Delete(val)
+	log.Printf("remove item: %v", i.om)
+	return nil
+}
+
 func main() {
-	// Define RabbitMQ server URL.
 	amqpURL := os.Getenv("AMQP_SERVER_URL")
+	if amqpURL == "" {
+		log.Fatal("AMQP_SERVER_URL was not provided")
+	}
 	amqpQueue := os.Getenv("AMQP_QUEUE_NAME")
-	// Create a new RabbitMQ connection.
-	connectRabbitMQ, err := amqp.Dial(amqpURL)
-	if err != nil {
-		panic(err)
+	if amqpQueue == "" {
+		log.Fatal("AMQP_QUEUE_NAME was not provided")
 	}
-	defer connectRabbitMQ.Close()
-
-	// Opening a channel to our RabbitMQ instance over
-	// the connection we have already established.
-	channelRabbitMQ, err := connectRabbitMQ.Channel()
+	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	defer channelRabbitMQ.Close()
+	defer conn.Close()
 
-	// Subscribing to QueueService1 for getting messages.
-	messages, err := channelRabbitMQ.Consume(
-		amqpQueue, // queue name
-		"",        // consumer
-		true,      // auto-ack
-		false,     // exclusive
-		false,     // no local
-		false,     // no wait
-		nil,       // arguments
-	)
+	serverCodec, err := codec.NewServerCodec(conn, amqpQueue, codec.GobCodec{})
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
-
-	// Build a welcome message.
-	log.Println("Successfully connected to RabbitMQ")
-	log.Println("Waiting for messages")
-
-	// Make a channel to receive messages into infinite loop.
-	forever := make(chan bool)
-
-	go func() {
-		for message := range messages {
-			// For example, show received message in a console.
-			log.Printf(" > Received message: %s\n", message.Body)
-		}
-	}()
-
-	<-forever
+	rpc.Register(NewItems())
+	log.Println("Server is running")
+	rpc.ServeCodec(serverCodec)
 }

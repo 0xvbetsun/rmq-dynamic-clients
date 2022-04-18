@@ -39,6 +39,8 @@ services:
     restart: always
   client:
     container_name: client
+    tty: true
+    stdin_open: true
     build:
       context: ../
       dockerfile: ./build/client.Dockerfile
@@ -50,6 +52,7 @@ services:
       - dev-network
     depends_on:
       - message-broker
+      - server
 networks:
   dev-network:
     driver: bridge

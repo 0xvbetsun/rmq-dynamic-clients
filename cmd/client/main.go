@@ -2,65 +2,89 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
+	"net/rpc"
 	"os"
+	"strings"
 
 	"github.com/streadway/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/codec"
 )
 
 func main() {
 	amqpURL := os.Getenv("AMQP_SERVER_URL")
+	if amqpURL == "" {
+		log.Fatal("AMQP_SERVER_URL was not provided")
+	}
 	amqpQueue := os.Getenv("AMQP_QUEUE_NAME")
-	// Create a new RabbitMQ connection.
-	connectRabbitMQ, err := amqp.Dial(amqpURL)
-	if err != nil {
-		panic(err)
+	if amqpQueue == "" {
+		log.Fatal("AMQP_QUEUE_NAME was not provided")
 	}
-	defer connectRabbitMQ.Close()
-
-	// Let's start by opening a channel to our RabbitMQ
-	// instance over the connection we have already
-	// established.
-	channelRabbitMQ, err := connectRabbitMQ.Channel()
+	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	defer channelRabbitMQ.Close()
-
-	// With the instance and declare Queues that we can
-	// publish and subscribe to.
-	_, err = channelRabbitMQ.QueueDeclare(
-		amqpQueue, // queue name
-		true,      // durable
-		false,     // auto delete
-		false,     // exclusive
-		false,     // no wait
-		nil,       // arguments
-	)
+	defer conn.Close()
+	clientCodec, err := codec.NewClientCodec(conn, amqpQueue, codec.GobCodec{})
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	// Make a channel to receive messages into infinite loop.
-	forever := make(chan bool)
+	cmdRouter := buildRouter()
+	client := rpc.NewClientWithCodec(clientCodec)
 	scanner := bufio.NewScanner(os.Stdin)
+	log.Println("Client is running")
 	for scanner.Scan() {
-		message := amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        scanner.Bytes(),
-		}
-
-		// Attempt to publish a message to the queue.
-		if err := channelRabbitMQ.Publish(
-			"",              // exchange
-			"QueueService1", // queue name
-			false,           // mandatory
-			false,           // immediate
-			message,         // message to publish
-		); err != nil {
+		cmd, arg, err := parseCmd(scanner.Text())
+		if err != nil {
 			log.Println(err)
+			continue
+		}
+		if handler, ok := cmdRouter[cmd]; ok {
+			err = handler(client, arg)
+			if err != nil {
+				log.Print(err)
+			}
+		} else {
+			log.Printf("unknown command %s", cmd)
 		}
 	}
+}
 
-	<-forever
+func AddItem(c *rpc.Client, arg string) error {
+	return c.Call("Items.AddItem", arg, nil)
+}
+
+func GetItem(c *rpc.Client, arg string) error {
+	return c.Call("Items.GetItem", arg, nil)
+}
+
+func GetAllItems(c *rpc.Client, arg string) error {
+	return c.Call("Items.GetAllItems", arg, nil)
+}
+
+func RemoveItem(c *rpc.Client, arg string) error {
+	return c.Call("Items.RemoveItem", arg, nil)
+}
+
+func buildRouter() map[string]func(*rpc.Client, string) error {
+	return map[string]func(*rpc.Client, string) error{
+		"AddItem":     AddItem,
+		"RemoveItem":  RemoveItem,
+		"GetItem":     GetItem,
+		"GetAllItems": GetAllItems,
+	}
+}
+
+func parseCmd(cmd string) (string, string, error) {
+	el := strings.Fields(cmd)
+	if len(el) > 2 {
+		return "", "", fmt.Errorf("illegal number of arguments %d", len(el))
+	}
+	// example: GetAllItems passes without args
+	if len(el) == 1 {
+		return el[0], "", nil
+	}
+	return el[0], el[1], nil
 }
