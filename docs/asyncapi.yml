@@ -8,32 +8,35 @@ servers:
     url: guest:guest@localhost:5672
     protocol: amqp
 channels:
-  items:
+  Items.GetAllItems:
     publish:
+      summary: Request fetching all items in order they were added
       message:
-        $ref: '#/components/messages/Items'
-  items.add:
+        payload:
+          type: string
+          example: Items.GetAllItems
+          pattern: '^Items.GetAllItems$'
+  Items.AddItem:
     publish:
+      summary: Request insertion of given item
       message:
-        $ref: '#/components/messages/Item'
-  items.get:
+        payload:
+          type: string
+          example: Items.AddItem abc
+          pattern: '^Items.AddItem .+$'
+  Items.GetItem:
     publish:
+      summary: Request fetching of requested item
       message:
-        $ref: '#/components/messages/Item'
-  items.remove:
+        payload:
+          type: string
+          example: Items.GetItem abc
+          pattern: '^Items.GetItem .+$'
+  Items.RemoveItem:
     publish:
+      summary: Request removing item
       message:
-        $ref: '#/components/messages/Item'
-  
-components:
-  messages:
-    Item:
-      payload:
-        type: string
-        description: Single Item
-        example: A
-    Items:
-      payload:
-        type: array
-        description: All Items
-        example: [A, B, C, D]
+        payload:  
+          type: string
+          example: Items.RemoveItem abc
+          pattern: '^Items.RemoveItem .+$'

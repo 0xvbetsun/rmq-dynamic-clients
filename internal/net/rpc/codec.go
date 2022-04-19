@@ -1,4 +1,4 @@
-package codec
+package rpc
 
 import (
 	"bytes"
@@ -8,17 +8,21 @@ import (
 )
 
 type codec struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
-	routing string //routing key
-
-	codec    GobCodec
+	conn     *amqp.Connection
+	ch       *amqp.Channel
+	routing  string //routing key
+	codec    EncodingCodec
 	delivery amqp.Delivery
-
-	message <-chan amqp.Delivery
+	msg      <-chan amqp.Delivery
 }
 
-//GobCodec is an EncodingCodec implementation to send/recieve Gob data over AMQP.
+// EncodingCodec implements marshaling and unmarshaling of seralized data.
+type EncodingCodec interface {
+	Marshal(interface{}) ([]byte, error)
+	Unmarshal([]byte, interface{}) error
+}
+
+// GobCodec is an EncodingCodec implementation to send/recieve Gob data over AMQP.
 type GobCodec struct{}
 
 func (GobCodec) Marshal(v interface{}) ([]byte, error) {

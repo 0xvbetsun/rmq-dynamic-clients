@@ -1,69 +1,37 @@
+// Entry point for application's server
 package main
 
 import (
 	"log"
-	"net/rpc"
 	"os"
 
 	"github.com/streadway/amqp"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/codec"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/ordered"
+	"github.com/vbetsun/rmq-dynamic-clients/configs"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/net/rpc"
 )
 
-type Items struct {
-	om *ordered.Map
-}
-
-func NewItems() *Items {
-	return &Items{
-		om: ordered.NewMap(),
-	}
-}
-
-func (i *Items) AddItem(val string, item *string) error {
-	*item = i.om.Set(val)
-	log.Printf("add item: %v", i.om)
-	return nil
-}
-
-func (i *Items) GetItem(val string, item *string) error {
-	*item = i.om.Get(val)
-	log.Printf("get item: %v", i.om)
-	return nil
-}
-
-func (i Items) GetAllItems(val string, items *[]string) error {
-	*items = i.om.Keys()
-	log.Printf("get all items: %v", i.om)
-	return nil
-}
-
-func (i Items) RemoveItem(val string, deleted *bool) error {
-	*deleted = i.om.Delete(val)
-	log.Printf("remove item: %v", i.om)
-	return nil
-}
-
 func main() {
-	amqpURL := os.Getenv("AMQP_SERVER_URL")
-	if amqpURL == "" {
-		log.Fatal("AMQP_SERVER_URL was not provided")
+	file, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
 	}
-	amqpQueue := os.Getenv("AMQP_QUEUE_NAME")
-	if amqpQueue == "" {
-		log.Fatal("AMQP_QUEUE_NAME was not provided")
+	log.SetOutput(file)
+
+	cfg, err := configs.New()
+	if err != nil {
+		log.Fatal(err)
 	}
-	conn, err := amqp.Dial(amqpURL)
+	conn, err := amqp.Dial(cfg.AMQP.Url)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
-	serverCodec, err := codec.NewServerCodec(conn, amqpQueue, codec.GobCodec{})
+	serverCodec, err := rpc.NewServerCodec(conn, cfg, rpc.GobCodec{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	rpc.Register(NewItems())
+	rpc.Register(rpc.NewItems())
 	log.Println("Server is running")
 	rpc.ServeCodec(serverCodec)
 }

@@ -1,4 +1,4 @@
-package codec
+package rpc
 
 import (
 	"errors"
@@ -7,13 +7,12 @@ import (
 	"sync/atomic"
 
 	"github.com/streadway/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/configs"
 )
 
-var ErrNoConsumers = errors.New("codec: No consumers in queue")
-
 type route struct {
-	messageID string
-	routing   string
+	msgID   string
+	routing string
 }
 
 type serverCodec struct {
@@ -23,8 +22,9 @@ type serverCodec struct {
 	seq   uint64
 }
 
+// ReadRequestHeader validates headers from request
 func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
-	c.delivery = <-c.message
+	c.delivery = <-c.msg
 
 	if c.delivery.CorrelationId == "" {
 		return errors.New("no routing key in delivery")
@@ -41,6 +41,7 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 	return nil
 }
 
+// ReadRequestBody unmarshals delivered data in body
 func (c *serverCodec) ReadRequestBody(v interface{}) error {
 	if v == nil {
 		return nil
@@ -48,6 +49,7 @@ func (c *serverCodec) ReadRequestBody(v interface{}) error {
 	return c.codec.codec.Unmarshal(c.delivery.Body, v)
 }
 
+// WriteResponse prepears message and send it to the channel
 func (c *serverCodec) WriteResponse(resp *rpc.Response, v interface{}) error {
 	body, err := c.codec.codec.Marshal(v)
 	if err != nil {
@@ -61,44 +63,59 @@ func (c *serverCodec) WriteResponse(resp *rpc.Response, v interface{}) error {
 		return errors.New("sequence doesn't have a route")
 	}
 
-	publishing := amqp.Publishing{
+	msg := amqp.Publishing{
 		ContentType:   "application/octet-stream",
 		ReplyTo:       resp.ServiceMethod,
-		MessageId:     route.messageID,
+		MessageId:     route.msgID,
 		CorrelationId: route.routing,
 		Body:          body,
 	}
 
 	if resp.Error != "" {
-		publishing.Headers = amqp.Table{"error": resp.Error}
+		msg.Headers = amqp.Table{"error": resp.Error}
 	}
-	return c.channel.Publish(
+	return c.ch.Publish(
 		"",
 		route.routing,
 		false,
 		false,
-		publishing,
+		msg,
 	)
 }
 
+// Close requests and waits for the response to close the AMQP connection.
 func (c *serverCodec) Close() error {
 	return c.conn.Close()
 }
 
-//NewServerCodec returns a new rpc.ClientCodec using AMQP on conn. serverRouting is the routing
-//key with with RPC calls are received, encodingCodec is an EncodingCoding implementation.
-func NewServerCodec(conn *amqp.Connection, serverRouting string, encodingCodec GobCodec) (rpc.ServerCodec, error) {
-	channel, err := conn.Channel()
+// NewServerCodec returns a new rpc.ClientCodec using AMQP on conn. serverRouting is the routing
+// key with with RPC calls are received, encodingCodec is an EncodingCoding implementation.
+func NewServerCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec EncodingCodec) (rpc.ServerCodec, error) {
+	ch, err := conn.Channel()
 	if err != nil {
 		return nil, err
 	}
 
-	queue, err := channel.QueueDeclare(serverRouting, true, false, false, false, nil)
+	queue, err := ch.QueueDeclare(
+		cfg.AMQP.Queue,
+		cfg.AMQP.Durable,
+		cfg.AMQP.AutoDelete,
+		cfg.AMQP.Exclusive,
+		cfg.AMQP.NoWait,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	messages, err := channel.Consume(queue.Name, "", true, false, false, false, nil)
+	msg, err := ch.Consume(
+		queue.Name, "",
+		cfg.AMQP.AutoAck,
+		cfg.AMQP.Exclusive,
+		cfg.AMQP.NoLocal,
+		cfg.AMQP.NoWait,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -106,11 +123,10 @@ func NewServerCodec(conn *amqp.Connection, serverRouting string, encodingCodec G
 	server := &serverCodec{
 		codec: &codec{
 			conn:    conn,
-			channel: channel,
+			ch:      ch,
 			routing: queue.Name,
-
 			codec:   encodingCodec,
-			message: messages,
+			msg:     msg,
 		},
 		lock:  new(sync.RWMutex),
 		calls: make(map[uint64]route),
@@ -118,4 +134,15 @@ func NewServerCodec(conn *amqp.Connection, serverRouting string, encodingCodec G
 	}
 
 	return server, err
+}
+
+// Register publishes the receiver's methods in the rpc.DefaultServer.
+func Register(receiver interface{}) error {
+	return rpc.Register(receiver)
+}
+
+// ServeCodec is like ServeConn but uses the specified codec to
+// decode requests and encode responses.
+func ServeCodec(codec rpc.ServerCodec) {
+	rpc.ServeCodec(codec)
 }

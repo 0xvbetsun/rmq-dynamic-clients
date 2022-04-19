@@ -1,0 +1,13 @@
+{
+	"amqp": {
+		"durable": true,
+		"autoDelete": false,
+		"autoAck": true,
+		"exclusive": false,
+		"noWait": false,
+		"noLocal": false
+	},
+	"docs": {
+		"port": 3000
+	}
+}

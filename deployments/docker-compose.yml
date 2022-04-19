@@ -35,7 +35,7 @@ services:
       context: ../
       dockerfile: ./build/docs.Dockerfile
     environment:
-      PORT: ${DOCS_PORT}
+      DOCS_PORT: ${DOCS_PORT}
     restart: always
   client:
     container_name: client
