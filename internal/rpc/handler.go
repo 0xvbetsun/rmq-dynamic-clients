@@ -23,28 +23,28 @@ func NewItems() *Items {
 // AddItem adds received item to the ordered map
 func (i *Items) AddItem(val string, item *interface{}) error {
 	*item = i.om.Add(val)
-	log.Printf("add item: %v", i.om)
+	log.Printf("add item: %s", *item)
 	return nil
 }
 
 // GetItem returns requested item
 func (i *Items) GetItem(val string, item *interface{}) error {
 	*item = i.om.Get(val)
-	log.Printf("get item: %v", i.om)
+	log.Printf("get item %s, %s", val, *item)
 	return nil
 }
 
 // GetAllItems returns items in order they were added
 func (i Items) GetAllItems(val string, items *[]interface{}) error {
 	*items = i.om.Keys()
-	log.Printf("get all items: %v", i.om)
+	log.Printf("get all items: %q", *items)
 	return nil
 }
 
 // RemoveItem deletes item from ordered map and keep order of items
 func (i Items) RemoveItem(val string, deleted *bool) error {
 	*deleted = i.om.Delete(val)
-	log.Printf("remove item: %v", i.om)
+	log.Printf("item %s was removed %t", val, *deleted)
 	return nil
 }
 

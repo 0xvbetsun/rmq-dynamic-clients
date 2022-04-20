@@ -1,7 +1,9 @@
 {
 	"amqp": {
+		"url": "amqp://guest:guest@localhost:5672",
+		"queue": "amqp_rpc_queue",
 		"durable": true,
-		"autoDelete": false,
+		"autoDelete": true,
 		"autoAck": true,
 		"exclusive": false,
 		"noWait": false,

@@ -22,7 +22,7 @@ type EncodingCodec interface {
 	Unmarshal([]byte, interface{}) error
 }
 
-// GobCodec is an EncodingCodec implementation to send/recieve Gob data over AMQP.
+// GobCodec is an EncodingCodec implementation to send/receive Gob data over AMQP.
 type GobCodec struct{}
 
 func (GobCodec) Marshal(v interface{}) ([]byte, error) {

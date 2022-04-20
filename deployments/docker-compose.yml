@@ -25,22 +25,38 @@ services:
     restart: always
     networks:
       - dev-network
+    volumes:
+      - type: bind
+        source: ../logs
+        target: /logs
+      - type: bind
+        source: ../configs
+        target: /configs
     depends_on:
       - message-broker
   docs:
     container_name: docs
     ports:
-      - 3000:${DOCS_PORT}
+      - ${DOCS_PORT}:${DOCS_PORT}
     build:
       context: ../
       dockerfile: ./build/docs.Dockerfile
     environment:
       DOCS_PORT: ${DOCS_PORT}
     restart: always
+    volumes:
+      - type: bind
+        source: ../configs
+        target: /configs
+      - type: bind
+        source: ../web
+        target: /web
   client:
-    container_name: client
     tty: true
     stdin_open: true
+    deploy:
+      mode: replicated
+      replicas: 3
     build:
       context: ../
       dockerfile: ./build/client.Dockerfile
@@ -48,6 +64,10 @@ services:
       AMQP_SERVER_URL: ${AMQP_SERVER_URL}
       AMQP_QUEUE_NAME: ${AMQP_QUEUE_NAME}
     restart: always
+    volumes:
+      - type: bind
+        source: ../configs
+        target: /configs
     networks:
       - dev-network
     depends_on:

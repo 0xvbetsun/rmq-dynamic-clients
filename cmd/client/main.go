@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,7 @@ import (
 
 	"github.com/streadway/amqp"
 	"github.com/vbetsun/rmq-dynamic-clients/configs"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/net/rpc"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/rpc"
 )
 
 func main() {
@@ -50,6 +51,9 @@ func main() {
 }
 
 func parseCmd(cmd string) (string, string, error) {
+	if cmd == "" {
+		return "", "", errors.New("command can not be empty string")
+	}
 	el := strings.Fields(cmd)
 	if len(el) > 2 {
 		return "", "", fmt.Errorf("illegal number of arguments %d", len(el))

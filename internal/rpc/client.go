@@ -47,9 +47,11 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	}
 
 	r.ServiceMethod = c.delivery.ReplyTo
-	if r.Seq, err = strconv.ParseUint(c.delivery.MessageId, 10, 64); err != nil {
-		return err
+	seqID, err := strconv.ParseUint(c.delivery.MessageId, 10, 64)
+	if err != nil {
+		seqID = 0
 	}
+	r.Seq = seqID
 	return nil
 }
 
@@ -73,8 +75,19 @@ func NewClientCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec En
 	if err != nil {
 		return nil, err
 	}
-
 	queue, err := ch.QueueDeclare(
+		"",
+		cfg.AMQP.Durable,
+		cfg.AMQP.AutoDelete,
+		cfg.AMQP.Exclusive,
+		cfg.AMQP.NoWait,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	sQueue, err := ch.QueueDeclare(
 		cfg.AMQP.Queue,
 		cfg.AMQP.Durable,
 		cfg.AMQP.AutoDelete,
@@ -85,10 +98,9 @@ func NewClientCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec En
 	if err != nil {
 		return nil, err
 	}
-	if queue.Consumers == 0 {
+	if sQueue.Consumers == 0 {
 		return nil, errors.New("no consumers in queue")
 	}
-
 	msg, err := ch.Consume(
 		queue.Name,
 		"",
@@ -102,7 +114,7 @@ func NewClientCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec En
 		codec: &codec{
 			conn:    conn,
 			ch:      ch,
-			routing: cfg.AMQP.Queue,
+			routing: queue.Name,
 			codec:   encodingCodec,
 			msg:     msg,
 		},

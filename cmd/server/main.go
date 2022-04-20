@@ -7,11 +7,11 @@ import (
 
 	"github.com/streadway/amqp"
 	"github.com/vbetsun/rmq-dynamic-clients/configs"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/net/rpc"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/rpc"
 )
 
 func main() {
-	file, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile("./logs/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,7 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	rpc.Register(rpc.NewItems())
+	if err = rpc.Register(rpc.NewItems()); err != nil {
+		log.Fatal(err)
+	}
 	log.Println("Server is running")
 	rpc.ServeCodec(serverCodec)
 }

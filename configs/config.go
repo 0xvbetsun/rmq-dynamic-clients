@@ -3,16 +3,16 @@ package configs
 
 import (
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
 // Configuration for RabbitMQ
 type AMQP struct {
-	Url        string `json:"-"`
-	Queue      string `json:"-"`
+	Url        string `json:"url"`
+	Queue      string `json:"queue"`
 	Durable    bool   `json:"durable"`
 	AutoDelete bool   `json:"autoDelete"`
 	AutoAck    bool   `json:"autoAck"`
@@ -33,7 +33,8 @@ type Config struct {
 
 // New reads and validates env variables, config file and returns new instance of Config
 func New() (*Config, error) {
-	file, err := ioutil.ReadFile("./configs/conf.json")
+	p := filepath.Join("configs", "conf.json")
+	file, err := ioutil.ReadFile(filepath.Clean(p))
 	if err != nil {
 		return nil, err
 	}
@@ -43,19 +44,18 @@ func New() (*Config, error) {
 	}
 
 	amqpURL, amqpQueue, docsPort := os.Getenv("AMQP_SERVER_URL"), os.Getenv("AMQP_QUEUE_NAME"), os.Getenv("DOCS_PORT")
-	if amqpURL == "" {
-		return nil, errors.New("env var AMQP_SERVER_URL was not provided")
+	if amqpURL != "" {
+		conf.AMQP.Url = amqpURL
 	}
-	conf.AMQP.Url = amqpURL
-	if amqpQueue == "" {
-		return nil, errors.New("env var AMQP_QUEUE_NAME was not provided")
+	if amqpQueue != "" {
+		conf.AMQP.Queue = amqpQueue
 	}
-	conf.AMQP.Queue = amqpQueue
-	if docsPort == "" {
-		docsPort = "3000"
+
+	if docsPort != "" {
+		if conf.Docs.Port, err = strconv.Atoi(docsPort); err != nil {
+			return nil, err
+		}
 	}
-	if conf.Docs.Port, err = strconv.Atoi(docsPort); err != nil {
-		return nil, err
-	}
+
 	return conf, nil
 }

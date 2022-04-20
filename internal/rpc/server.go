@@ -25,7 +25,6 @@ type serverCodec struct {
 // ReadRequestHeader validates headers from request
 func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 	c.delivery = <-c.msg
-
 	if c.delivery.CorrelationId == "" {
 		return errors.New("no routing key in delivery")
 	}
@@ -109,7 +108,8 @@ func NewServerCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec En
 	}
 
 	msg, err := ch.Consume(
-		queue.Name, "",
+		cfg.AMQP.Queue,
+		"",
 		cfg.AMQP.AutoAck,
 		cfg.AMQP.Exclusive,
 		cfg.AMQP.NoLocal,

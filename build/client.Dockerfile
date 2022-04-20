@@ -8,12 +8,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the code into the container.
-COPY ./cmd/client/main.go .
+COPY . .
 
 # Set necessary environment variables needed 
 # for our image and build the client.
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-RUN go build -ldflags="-s -w" -o client .
+RUN go build -ldflags="-s -w" -o client ./cmd/client/main.go
 
 FROM scratch
 
