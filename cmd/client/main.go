@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/streadway/amqp"
 	"github.com/vbetsun/rmq-dynamic-clients/configs"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/rpc"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/transport/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/transport/rpc"
 )
 
 func main() {
@@ -19,18 +19,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, err := amqp.Dial(cfg.AMQP.Url)
+	amqpClient, err := amqp.NewClient(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
-	clientCodec, err := rpc.NewClientCodec(conn, cfg, rpc.GobCodec{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	cmdRouter := rpc.BuildRouter()
-	client := rpc.NewClientWithCodec(clientCodec)
+	clientCodec := rpc.NewClientCodec(rpc.CodecDeps{
+		Config: cfg,
+		Conn:   amqpClient.Conn,
+		Ch:     amqpClient.Ch,
+		Queue:  amqpClient.Queue,
+		Codec:  rpc.GobCodec{},
+		Msg:    amqpClient.Msg,
+	})
+	rpcClient := rpc.NewClientWithCodec(clientCodec)
 	scanner := bufio.NewScanner(os.Stdin)
 	log.Println("Client is running")
 	for scanner.Scan() {
@@ -40,7 +42,7 @@ func main() {
 			continue
 		}
 		if handler, ok := cmdRouter[cmd]; ok {
-			err = handler(client, arg)
+			err = handler(rpcClient, arg)
 			if err != nil {
 				log.Print(err)
 			}

@@ -6,8 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/streadway/amqp"
-	"github.com/vbetsun/rmq-dynamic-clients/configs"
+	"github.com/streadway/amqp" // TODO: remove this dependency
 )
 
 type route struct {
@@ -20,6 +19,22 @@ type serverCodec struct {
 	lock  *sync.RWMutex
 	calls map[uint64]route
 	seq   uint64
+}
+
+// NewServerCodec returns a new instance of Server Codec
+func NewServerCodec(deps CodecDeps) rpc.ServerCodec {
+	return &serverCodec{
+		codec: &codec{
+			conn:    deps.Conn,
+			ch:      deps.Ch,
+			routing: deps.Queue.Name,
+			codec:   deps.Codec,
+			msg:     deps.Msg,
+		},
+		lock:  new(sync.RWMutex),
+		calls: make(map[uint64]route),
+		seq:   0,
+	}
 }
 
 // ReadRequestHeader validates headers from request
@@ -85,55 +100,6 @@ func (c *serverCodec) WriteResponse(resp *rpc.Response, v interface{}) error {
 // Close requests and waits for the response to close the AMQP connection.
 func (c *serverCodec) Close() error {
 	return c.conn.Close()
-}
-
-// NewServerCodec returns a new rpc.ClientCodec using AMQP on conn. serverRouting is the routing
-// key with with RPC calls are received, encodingCodec is an EncodingCoding implementation.
-func NewServerCodec(conn *amqp.Connection, cfg *configs.Config, encodingCodec EncodingCodec) (rpc.ServerCodec, error) {
-	ch, err := conn.Channel()
-	if err != nil {
-		return nil, err
-	}
-
-	queue, err := ch.QueueDeclare(
-		cfg.AMQP.Queue,
-		cfg.AMQP.Durable,
-		cfg.AMQP.AutoDelete,
-		cfg.AMQP.Exclusive,
-		cfg.AMQP.NoWait,
-		nil,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	msg, err := ch.Consume(
-		cfg.AMQP.Queue,
-		"",
-		cfg.AMQP.AutoAck,
-		cfg.AMQP.Exclusive,
-		cfg.AMQP.NoLocal,
-		cfg.AMQP.NoWait,
-		nil,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	server := &serverCodec{
-		codec: &codec{
-			conn:    conn,
-			ch:      ch,
-			routing: queue.Name,
-			codec:   encodingCodec,
-			msg:     msg,
-		},
-		lock:  new(sync.RWMutex),
-		calls: make(map[uint64]route),
-		seq:   0,
-	}
-
-	return server, err
 }
 
 // Register publishes the receiver's methods in the rpc.DefaultServer.

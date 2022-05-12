@@ -5,9 +5,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/streadway/amqp"
 	"github.com/vbetsun/rmq-dynamic-clients/configs"
-	"github.com/vbetsun/rmq-dynamic-clients/internal/rpc"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/service"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/storage"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/transport/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/internal/transport/rpc"
 )
 
 func main() {
@@ -21,17 +23,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, err := amqp.Dial(cfg.AMQP.Url)
+	server, err := amqp.NewServer(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
-
-	serverCodec, err := rpc.NewServerCodec(conn, cfg, rpc.GobCodec{})
+	serverCodec := rpc.NewServerCodec(rpc.CodecDeps{
+		Config: cfg,
+		Conn:   server.Conn,
+		Ch:     server.Ch,
+		Queue:  server.Queue,
+		Codec:  rpc.GobCodec{},
+		Msg:    server.Msg,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err = rpc.Register(rpc.NewItems()); err != nil {
+	storage := storage.NewItems()
+	service := service.NewService(storage)
+	handler := rpc.NewHandler(service)
+	if err = rpc.Register(handler); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Server is running")

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 
 	"github.com/streadway/amqp"
+	"github.com/vbetsun/rmq-dynamic-clients/configs"
 )
 
 type codec struct {
@@ -14,6 +15,15 @@ type codec struct {
 	codec    EncodingCodec
 	delivery amqp.Delivery
 	msg      <-chan amqp.Delivery
+}
+
+type CodecDeps struct {
+	Config *configs.Config
+	Conn   *amqp.Connection
+	Ch     *amqp.Channel
+	Queue  amqp.Queue
+	Codec  EncodingCodec
+	Msg    <-chan amqp.Delivery
 }
 
 // EncodingCodec implements marshaling and unmarshaling of seralized data.
